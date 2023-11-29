@@ -1,13 +1,14 @@
+import pandas as pd
 from pymongo import MongoClient
 from pyspark.sql import SparkSession
 from pyspark.sql.types import StructType, StructField
-from pyspark.sql.functions import udf
+from pyspark.sql.functions import udf,array_intersect,size,col,lit
 from pyspark.sql.types import ArrayType, StringType
-from nltk.corpus import stopwords
+#from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
-import nltk_script
+#import nltk
 
-nltk_script.download('stopwords')
+#nltk.download('stopwords')
 
 def similar_jobs(candidate_skills, collection):
     print('collection', collection)
@@ -15,10 +16,7 @@ def similar_jobs(candidate_skills, collection):
     # Fetch data from MongoDB and exclude the "_id" field
     data = list(collection.find({}, projection={"_id": 0}))
 
-    # Print the head of the data
-    print("Head of the data:")
-    for entry in data[:5]:
-        print(entry)
+    pandas_df = pd.DataFrame(data)
 
     # Starting a Spark session
     spark = SparkSession.builder.appName("JobRecommendation").getOrCreate()
@@ -30,24 +28,27 @@ def similar_jobs(candidate_skills, collection):
     ])
 
     # Create a PySpark DataFrame from the data fetched using pymongo
-    job_descriptions = spark.createDataFrame(data, schema=schema)
+    job_descriptions = spark.createDataFrame(pandas_df, schema=schema)
     job_descriptions_sample = job_descriptions.sample(fraction=0.3, seed=42)
 
-    stop_words = set(stopwords.words('english'))
+    
+    #stop_words = set(stopwords.words('english'))
     stemmer = PorterStemmer()
 
     # Tokenize the job descriptions' skills column by commas, convert to lowercase, and preprocess
     @udf(ArrayType(StringType()))
     def preprocess_job_skills(skills):
         skills = [skill.strip().lower() for skill in skills.split(",")]
-        skills = [stemmer.stem(skill) for skill in skills if skill not in stop_words]
+        skills = [stemmer.stem(skill) for skill in skills ]
+        #if skill not in stop_words
         return skills
 
-    job_descriptions = job_descriptions.withColumn("job_description", preprocess_job_skills(job_descriptions["job_description"]))
+    job_descriptions = job_descriptions_sample.withColumn("job_description", preprocess_job_skills(job_descriptions["job_description"]))
 
     # Tokenize the candidate's skills, convert to lowercase, and preprocess
     candidate_skills = [skill.strip().lower() for skill in candidate_skills]
-    candidate_skills = [stemmer.stem(skill) for skill in candidate_skills if skill not in stop_words]
+    candidate_skills = [stemmer.stem(skill) for skill in candidate_skills ]
+    #if skill not in stop_words
 
     # Calculate the number of common skills
     common_skills_expr = size(array_intersect(job_descriptions["job_description"], lit(candidate_skills)))
@@ -55,16 +56,19 @@ def similar_jobs(candidate_skills, collection):
 
     # Selecting the relevant columns and sorting by the number of common skills
     result = job_descriptions.select("username", "common_skills").orderBy(col("common_skills").desc())
+    #result = job_descriptions.select("job_description", "common_skills").orderBy(col("common_skills").desc())
     result = result.limit(10)
-
-    # Print the processed data
-    print("Processed data:")
-    result.show(5)
 
     # Convert the 'username' column to a Python list
     job_list = result.select("username").rdd.flatMap(lambda x: x).collect()
+    #job_list = result.select("job_description").rdd.flatMap(lambda x: x).collect()
+
+    job_doc = {}
+    for item in data:
+        if item['username'] in job_list:
+            job_doc[item['username']] = item['Job Description']
 
     # Now 'job_list' is a Python list containing the values from the 'username' column
-    return job_list
-
-    # return []
+    print(job_doc)
+    return job_doc
+    
