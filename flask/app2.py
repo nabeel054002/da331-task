@@ -193,8 +193,8 @@ def recommend_jobs():
     #     job = jobs_collection.find_one({'username': job_username})
     #     if job:
     #         recommended_jobs_data.append({'job_username': job_username, 'job_description': job.get('job_description', '')})
-
-    return jsonify({'recommended_jobs': {}}), 200
+    print("recommended_jobs", recommended_jobs)
+    return jsonify({'recommended_jobs': recommended_jobs}), 200
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

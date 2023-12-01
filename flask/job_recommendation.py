@@ -66,9 +66,8 @@ def similar_jobs(candidate_skills, collection):
     job_doc = {}
     for item in data:
         if item['username'] in job_list:
-            job_doc[item['username']] = item['Job Description']
+            job_doc[item['username']] = item
 
     # Now 'job_list' is a Python list containing the values from the 'username' column
-    print(job_doc)
     return job_doc
     
